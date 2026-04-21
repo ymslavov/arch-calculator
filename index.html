@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<title>Интерактивен калкулатор за арки</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f5f5;
+    color: #222;
+    padding: 20px;
+  }
+  h1 { font-size: 20px; margin-bottom: 14px; text-align: center; }
+  .layout { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }
+  .canvas-wrap {
+    flex: 1;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  canvas { display: block; width: 100%; }
+  .controls {
+    width: 300px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel h2 {
+    font-size: 14px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid;
+  }
+  .panel.big h2 { border-color: #336; color: #336; }
+  .panel.small h2 { border-color: #c00; color: #c00; }
+  .panel.info h2 { border-color: #555; color: #555; }
+  .field {
+    margin-bottom: 12px;
+  }
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 3px;
+  }
+  .field .val {
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .panel.big .val { color: #336; }
+  .panel.small .val { color: #c00; }
+  input[type=range] {
+    width: 100%;
+    margin: 2px 0;
+  }
+  .panel.small input[type=range] { accent-color: #c00; }
+  .panel.big input[type=range] { accent-color: #336; }
+  .num-input {
+    width: 60px;
+    padding: 2px 4px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    text-align: right;
+  }
+  .info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    gap: 4px 10px;
+    font-size: 12px;
+  }
+  .info-grid .hdr { font-weight: 600; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+  .info-grid .big-v { color: #336; font-weight: 600; }
+  .info-grid .small-v { color: #c00; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Калкулатор за арки</h1>
+
+<div class="layout">
+  <div class="canvas-wrap">
+    <canvas id="c" width="900" height="520"></canvas>
+  </div>
+
+  <div class="controls">
+    <!-- Small arch controls -->
+    <div class="panel small">
+      <h2>Малка арка</h2>
+      <div class="field">
+        <label>Ширина <span><input class="num-input" type="number" id="n-sw" value="185" min="50" max="400" step="1" oninput="syncFromNum('sw')"> см</span></label>
+        <input type="range" id="s-sw" min="50" max="400" step="1" value="185" oninput="syncFromSlider('sw')">
+      </div>
+      <div class="field">
+        <label>Начало на кривата (springing) <span><input class="num-input" type="number" id="n-ss" value="218" min="180" max="244" step="0.5" oninput="syncFromNum('ss')"> см</span></label>
+        <input type="range" id="s-ss" min="180" max="244" step="0.5" value="218" oninput="syncFromSlider('ss')">
+      </div>
+      <div class="field">
+        <label>Rise (извивка) <span><input class="num-input" type="number" id="n-sr" value="12" min="1" max="50" step="0.5" oninput="syncFromNum('sr')"> см</span></label>
+        <input type="range" id="s-sr" min="1" max="50" step="0.5" value="12" oninput="syncFromSlider('sr')">
+      </div>
+    </div>
+
+    <!-- Big arch controls -->
+    <div class="panel big">
+      <h2>Голяма арка (референтна)</h2>
+      <div class="field">
+        <label>Ширина <span><input class="num-input" type="number" id="n-bw" value="355" min="100" max="500" step="1" oninput="syncFromNum('bw')"> см</span></label>
+        <input type="range" id="s-bw" min="100" max="500" step="1" value="355" oninput="syncFromSlider('bw')">
+      </div>
+      <div class="field">
+        <label>Начало на кривата (springing) <span><input class="num-input" type="number" id="n-bs" value="218" min="180" max="244" step="0.5" oninput="syncFromNum('bs')"> см</span></label>
+        <input type="range" id="s-bs" min="180" max="244" step="0.5" value="218" oninput="syncFromSlider('bs')">
+      </div>
+      <div class="field">
+        <label>Rise (извивка) <span><input class="num-input" type="number" id="n-br" value="26" min="1" max="50" step="0.5" oninput="syncFromNum('br')"> см</span></label>
+        <input type="range" id="s-br" min="1" max="50" step="0.5" value="26" oninput="syncFromSlider('br')">
+      </div>
+    </div>
+
+    <!-- Computed values -->
+    <div class="panel info">
+      <h2>Изчислени стойности</h2>
+      <div class="info-grid">
+        <span class="hdr"></span><span class="hdr">Голяма</span><span class="hdr">Малка</span>
+        <span>Най-висока т.</span><span class="big-v" id="i-bt">244</span><span class="small-v" id="i-st">230</span>
+        <span>Радиус</span><span class="big-v" id="i-br">619</span><span class="small-v" id="i-sr">363</span>
+        <span>Rise / span</span><span class="big-v" id="i-brs">7.3%</span><span class="small-v" id="i-srs">6.5%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const GAP = 30;
+
+function syncFromSlider(id) {
+  document.getElementById('n-' + id).value = document.getElementById('s-' + id).value;
+  update();
+}
+function syncFromNum(id) {
+  document.getElementById('s-' + id).value = document.getElementById('n-' + id).value;
+  update();
+}
+
+function getVals() {
+  return {
+    sw: parseFloat(document.getElementById('s-sw').value),
+    ss: parseFloat(document.getElementById('s-ss').value),
+    sr: parseFloat(document.getElementById('s-sr').value),
+    bw: parseFloat(document.getElementById('s-bw').value),
+    bs: parseFloat(document.getElementById('s-bs').value),
+    br: parseFloat(document.getElementById('s-br').value),
+  };
+}
+
+function calcR(span, rise) {
+  return (span ** 2) / (8 * rise) + rise / 2;
+}
+
+function archPath(ctx, x0, span, spring, rise, scale, floorY) {
+  // Returns path for the arch opening (floor to springing to arc to springing to floor)
+  const R = calcR(span, rise);
+  const cx = x0 + (span * scale) / 2;
+  const springY = floorY - spring * scale;
+  const cy = springY + (R - rise) * scale;
+  const halfAngle = Math.asin((span / 2) / R);
+  const startAngle = 3 * Math.PI / 2 - halfAngle;
+  const endAngle = 3 * Math.PI / 2 + halfAngle;
+
+  ctx.moveTo(x0, floorY);
+  ctx.lineTo(x0, springY);
+  ctx.arc(cx, cy, R * scale, startAngle, endAngle, false);
+  ctx.lineTo(x0 + span * scale, floorY);
+  ctx.closePath();
+}
+
+function drawWallWithArches(ctx, v, scale, floorY, marginL, W, marginR) {
+  const smallX0 = marginL;
+  const bigX0 = marginL + (v.sw + GAP) * scale;
+  const maxTop = Math.max(v.bs + v.br, v.ss + v.sr);
+  const wallTop = floorY - (maxTop + 12) * scale;
+  const wallRight = bigX0 + v.bw * scale;
+
+  // Draw wall (solid grey)
+  ctx.save();
+  ctx.fillStyle = '#d0d0d0';
+  ctx.beginPath();
+  ctx.rect(smallX0 - 4, wallTop, wallRight - smallX0 + 8, floorY - wallTop);
+  ctx.fill();
+
+  // Cut out arch openings using destination-out
+  ctx.globalCompositeOperation = 'destination-out';
+
+  ctx.beginPath();
+  archPath(ctx, smallX0, v.sw, v.ss, v.sr, scale, floorY);
+  ctx.fill();
+
+  ctx.beginPath();
+  archPath(ctx, bigX0, v.bw, v.bs, v.br, scale, floorY);
+  ctx.fill();
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Draw arch outlines on top
+  ctx.beginPath();
+  archPath(ctx, smallX0, v.sw, v.ss, v.sr, scale, floorY);
+  ctx.strokeStyle = '#c00';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  archPath(ctx, bigX0, v.bw, v.bs, v.br, scale, floorY);
+  ctx.strokeStyle = '#224';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function update() {
+  const v = getVals();
+  const bigR = calcR(v.bw, v.br);
+  const smallR = calcR(v.sw, v.sr);
+  const bigTop = v.bs + v.br;
+  const smallTop = v.ss + v.sr;
+
+  // Update info panel
+  document.getElementById('i-bt').textContent = bigTop.toFixed(1) + ' см';
+  document.getElementById('i-st').textContent = smallTop.toFixed(1) + ' см';
+  document.getElementById('i-br').textContent = bigR.toFixed(0) + ' см';
+  document.getElementById('i-sr').textContent = smallR.toFixed(0) + ' см';
+  document.getElementById('i-brs').textContent = (v.br / v.bw * 100).toFixed(1) + '%';
+  document.getElementById('i-srs').textContent = (v.sr / v.sw * 100).toFixed(1) + '%';
+
+  draw(v);
+}
+
+function draw(v) {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const totalSpan = v.sw + GAP + v.bw;
+  const maxTop = Math.max(v.bs + v.br, v.ss + v.sr);
+  const marginL = 55, marginR = 25, marginT = 40, marginB = 45;
+  const drawW = W - marginL - marginR;
+  const drawH = H - marginT - marginB;
+  const scale = Math.min(drawW / totalSpan, drawH / (maxTop + 5));
+
+  const floorY = H - marginB;
+  const smallX0 = marginL;
+  const bigX0 = marginL + (v.sw + GAP) * scale;
+
+  // Floor line
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(marginL - 15, floorY);
+  ctx.lineTo(W - marginR + 5, floorY);
+  ctx.stroke();
+
+  // Draw wall with arch cutouts (masking)
+  drawWallWithArches(ctx, v, scale, floorY, marginL, W, marginR);
+
+  // Reference lines
+  const lines = [
+    { y: v.bs + v.br, label: (v.bs + v.br).toFixed(0) + ' см', color: '#99b', dash: [4, 4] },
+    { y: v.bs, label: v.bs.toFixed(0) + ' см', color: '#bbb', dash: [2, 3] },
+  ];
+  if (Math.abs(v.ss - v.bs) > 0.5) {
+    lines.push({ y: v.ss, label: v.ss.toFixed(0) + ' см', color: '#daa', dash: [2, 3] });
+  }
+  if (Math.abs((v.ss + v.sr) - (v.bs + v.br)) > 0.5) {
+    lines.push({ y: v.ss + v.sr, label: (v.ss + v.sr).toFixed(1) + ' см', color: '#c88', dash: [3, 3] });
+  }
+
+  for (const ln of lines) {
+    const py = floorY - ln.y * scale;
+    ctx.save();
+    ctx.strokeStyle = ln.color;
+    ctx.lineWidth = 0.7;
+    ctx.setLineDash(ln.dash);
+    ctx.beginPath();
+    ctx.moveTo(marginL - 8, py);
+    ctx.lineTo(W - marginR, py);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = ln.color;
+    ctx.font = '11px -apple-system, Arial';
+    ctx.textAlign = 'right';
+    ctx.fillText(ln.label, marginL - 12, py + 4);
+    ctx.restore();
+  }
+
+  // Width dimensions
+  ctx.fillStyle = '#444';
+  ctx.font = '12px -apple-system, Arial';
+  ctx.textAlign = 'center';
+
+  // Small width
+  const sw2 = smallX0 + v.sw * scale;
+  ctx.strokeStyle = '#c00';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(smallX0, floorY + 16); ctx.lineTo(sw2, floorY + 16);
+  ctx.moveTo(smallX0, floorY + 10); ctx.lineTo(smallX0, floorY + 22);
+  ctx.moveTo(sw2, floorY + 10); ctx.lineTo(sw2, floorY + 22);
+  ctx.stroke();
+  ctx.fillStyle = '#c00';
+  ctx.fillText(v.sw + ' см', (smallX0 + sw2) / 2, floorY + 34);
+
+  // Big width
+  const bw2 = bigX0 + v.bw * scale;
+  ctx.strokeStyle = '#224';
+  ctx.beginPath();
+  ctx.moveTo(bigX0, floorY + 16); ctx.lineTo(bw2, floorY + 16);
+  ctx.moveTo(bigX0, floorY + 10); ctx.lineTo(bigX0, floorY + 22);
+  ctx.moveTo(bw2, floorY + 10); ctx.lineTo(bw2, floorY + 22);
+  ctx.stroke();
+  ctx.fillStyle = '#224';
+  ctx.fillText(v.bw + ' см', (bigX0 + bw2) / 2, floorY + 34);
+
+  // Top labels
+  ctx.font = 'bold 13px -apple-system, Arial';
+  const smallTopY = floorY - (v.ss + v.sr) * scale;
+  ctx.fillStyle = '#c00';
+  ctx.fillText((v.ss + v.sr).toFixed(1) + ' см', smallX0 + v.sw * scale / 2, smallTopY - 14);
+  ctx.font = '11px -apple-system, Arial';
+  ctx.fillText('rise ' + v.sr + ' см  |  R ' + calcR(v.sw, v.sr).toFixed(0) + ' см', smallX0 + v.sw * scale / 2, smallTopY - 1);
+
+  const bigTopY = floorY - (v.bs + v.br) * scale;
+  ctx.fillStyle = '#224';
+  ctx.font = 'bold 13px -apple-system, Arial';
+  ctx.fillText((v.bs + v.br).toFixed(1) + ' см', bigX0 + v.bw * scale / 2, bigTopY - 14);
+  ctx.font = '11px -apple-system, Arial';
+  ctx.fillText('rise ' + v.br + ' см  |  R ' + bigR.toFixed(0) + ' см', bigX0 + v.bw * scale / 2, bigTopY - 1);
+
+  // Arch labels
+  ctx.font = '13px -apple-system, Arial';
+  ctx.fillStyle = '#c00';
+  ctx.fillText('Малка', smallX0 + v.sw * scale / 2, floorY - 80 * scale);
+  ctx.fillStyle = '#224';
+  ctx.fillText('Голяма', bigX0 + v.bw * scale / 2, floorY - 80 * scale);
+}
+
+update();
+</script>
+
+</body>
+</html>
